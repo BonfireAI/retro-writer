@@ -45,8 +45,8 @@ esac
 # Output .md of the same basename, in the same directory as the source.
 dest="${src%.wg}.md"
 
-wordgrinder --convert "$src" "$dest" >/dev/null 2>&1 \
-	|| die "conversion failed: $src -> $dest"
+err="$(wordgrinder --convert "$src" "$dest" 2>&1 >/dev/null)" \
+	|| die "conversion failed: $src -> $dest${err:+ — wordgrinder said: $err}"
 
 [ -f "$dest" ] || die "conversion reported success but no output at: $dest"
 
