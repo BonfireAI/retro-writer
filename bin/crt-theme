@@ -1,0 +1,338 @@
+#!/usr/bin/env python3
+"""crt-theme — CRT theme picker for the retro-writer cockpit (cool-retro-term 1.2.0).
+
+cool-retro-term 1.2.0's --profile flag is BROKEN (does nothing). Instead the
+"current look" lives in a QML LocalStorage SQLite DB, in the `_CURRENT_PROFILE`
+row of the `settings` table — a JSON object. Applying a theme = writing that row
+with the theme's JSON, then launching plain cool-retro-term (no flags).
+
+So: whatever theme this tool last applied is the look you get when you run `blog`.
+
+Commands:
+    crt-theme                 interactive menu: list w/ color swatches, preview by number
+    crt-theme list            print labels + descs + swatches, no launch
+    crt-theme set <key>       apply theme to DB (becomes the default), no launch
+    crt-theme show <key>      apply + launch cool-retro-term to preview
+    crt-theme current         print current font/bg color + matching theme key
+    crt-theme --help          this help
+"""
+
+import sys
+import os
+import glob
+import json
+import time
+import shutil
+import sqlite3
+import argparse
+import subprocess
+
+# --- locations -------------------------------------------------------------
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+THEMES_DIR = os.path.join(REPO_ROOT, "themes")
+MANIFEST_PATH = os.path.join(THEMES_DIR, "manifest.json")
+
+DB_GLOB = os.path.expanduser(
+    "~/.local/share/cool-retro-term/cool-retro-term/QML/OfflineStorage/Databases/*.sqlite"
+)
+DB_INI_NAME_MARKER = "Name=coolretroterm1"
+
+PROFILE_ROW = "_CURRENT_PROFILE"
+
+
+# --- small helpers ---------------------------------------------------------
+
+def die(msg, code=1):
+    print("crt-theme: %s" % msg, file=sys.stderr)
+    sys.exit(code)
+
+
+def hex_to_rgb(h):
+    """'#rrggbb' -> (r, g, b). Tolerates missing '#' and short forms."""
+    h = (h or "").lstrip("#").strip()
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    if len(h) != 6:
+        return (128, 128, 128)
+    try:
+        return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return (128, 128, 128)
+
+
+def swatch(font_hex, bg_hex, text=" Aa#1.+ "):
+    """ANSI truecolor swatch: theme's fontColor on its backgroundColor."""
+    fr, fg, fb = hex_to_rgb(font_hex)
+    br, bg, bb = hex_to_rgb(bg_hex)
+    return "\033[48;2;%d;%d;%d;38;2;%d;%d;%dm%s\033[0m" % (br, bg, bb, fr, fg, fb, text)
+
+
+# --- manifest + themes -----------------------------------------------------
+
+def load_manifest():
+    if not os.path.isfile(MANIFEST_PATH):
+        die("theme manifest not found at %s" % MANIFEST_PATH)
+    try:
+        with open(MANIFEST_PATH) as f:
+            entries = json.load(f)
+    except (ValueError, OSError) as e:
+        die("could not read theme manifest: %s" % e)
+    if not isinstance(entries, list) or not entries:
+        die("theme manifest is empty or malformed")
+    return entries
+
+
+def manifest_by_key(entries, key):
+    for e in entries:
+        if e.get("key") == key:
+            return e
+    return None
+
+
+def load_theme_json(entry):
+    """Return (profile_dict, raw_json_str) for a manifest entry; exit on failure."""
+    path = os.path.join(THEMES_DIR, entry["file"])
+    if not os.path.isfile(path):
+        die("theme file missing: %s" % path)
+    try:
+        with open(path) as f:
+            raw = f.read()
+        prof = json.loads(raw)
+    except (ValueError, OSError) as e:
+        die("bad theme JSON in %s: %s" % (path, e))
+    if not isinstance(prof, dict) or "fontColor" not in prof or "backgroundColor" not in prof:
+        die("theme %s is not a valid _CURRENT_PROFILE object" % entry["key"])
+    return prof, raw
+
+
+# --- DB --------------------------------------------------------------------
+
+def find_db():
+    """Glob the Databases dir for the .sqlite whose .ini sidecar is coolretroterm1."""
+    candidates = sorted(glob.glob(DB_GLOB))
+    for db in candidates:
+        ini = os.path.splitext(db)[0] + ".ini"
+        try:
+            with open(ini) as f:
+                if DB_INI_NAME_MARKER in f.read():
+                    return db
+        except OSError:
+            continue
+    # Fallback: a single .sqlite with no readable .ini is still likely it.
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
+
+
+def require_db():
+    db = find_db()
+    if not db:
+        die(
+            "cool-retro-term settings DB not found.\n"
+            "         Launch cool-retro-term once to initialize its settings, then re-run.",
+            code=2,
+        )
+    return db
+
+
+def read_current_profile(db):
+    """Return the current _CURRENT_PROFILE dict, or None if unreadable."""
+    try:
+        con = sqlite3.connect(db)
+        row = con.execute(
+            "SELECT value FROM settings WHERE setting=?", (PROFILE_ROW,)
+        ).fetchone()
+        con.close()
+    except sqlite3.Error as e:
+        die("could not read settings DB: %s" % e)
+    if not row:
+        return None
+    try:
+        return json.loads(row[0])
+    except (ValueError, TypeError):
+        return None
+
+
+def apply_theme(db, prof, label):
+    """Stop a running cool-retro-term, back up the DB, write the profile row."""
+    # 1. Stop any running instance so it can't overwrite our write on quit.
+    #    EXACT name only — never -f (that would match this script's own argv).
+    subprocess.run(["pkill", "-x", "cool-retro-term"],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(1)
+
+    # 2. Back up the DB (copy; overwrite ok).
+    bak = db + ".crt-theme.bak"
+    try:
+        shutil.copy2(db, bak)
+    except OSError as e:
+        die("could not back up DB to %s: %s" % (bak, e))
+
+    # 3. Write the profile row, pretty-printed.
+    pretty = json.dumps(prof, indent=2)
+    try:
+        con = sqlite3.connect(db)
+        con.execute(
+            "UPDATE settings SET value=? WHERE setting=?", (pretty, PROFILE_ROW)
+        )
+        con.commit()
+        changed = con.total_changes
+        con.close()
+    except sqlite3.Error as e:
+        die("could not write theme to DB: %s" % e)
+    if changed == 0:
+        die("no _CURRENT_PROFILE row found in DB to update")
+    return bak
+
+
+def launch(label):
+    """Launch plain cool-retro-term, inheriting the caller's environment."""
+    try:
+        subprocess.Popen(
+            ["cool-retro-term", "-T", label],
+            start_new_session=True,
+        )
+    except FileNotFoundError:
+        die("cool-retro-term not found on PATH — is it installed?")
+
+
+# --- presentation ----------------------------------------------------------
+
+def print_theme_line(idx, entry, prof):
+    sw = swatch(prof["fontColor"], prof["backgroundColor"])
+    if idx is not None:
+        print("  %2d. %s  %s" % (idx, sw, entry["label"]))
+    else:
+        print("  %s  %s" % (sw, entry["label"]))
+    print("        %s" % entry.get("desc", ""))
+
+
+def match_theme_key(entries, font_hex, bg_hex):
+    """Find a manifest theme whose font+bg match the given colors."""
+    def norm(h):
+        return (h or "").lstrip("#").lower()
+    for e in entries:
+        prof, _ = load_theme_json(e)
+        if norm(prof["fontColor"]) == norm(font_hex) and \
+           norm(prof["backgroundColor"]) == norm(bg_hex):
+            return e
+    return None
+
+
+# --- commands --------------------------------------------------------------
+
+def cmd_list(entries):
+    print("CRT themes for the retro-writer cockpit:\n")
+    for i, e in enumerate(entries, 1):
+        prof, _ = load_theme_json(e)
+        print_theme_line(i, e, prof)
+    print()
+
+
+def cmd_set(entries, key, launch_after):
+    entry = manifest_by_key(entries, key)
+    if not entry:
+        die("unknown theme key: %s (run `crt-theme list` to see keys)" % key, code=2)
+    prof, _ = load_theme_json(entry)
+    db = require_db()
+    apply_theme(db, prof, entry["label"])
+    print("Applied theme '%s' (%s). It is now the cockpit default — `blog` will use it."
+          % (entry["label"], key))
+    if launch_after:
+        print("Launching cool-retro-term to preview...")
+        launch(entry["label"])
+
+
+def cmd_current(entries):
+    db = require_db()
+    prof = read_current_profile(db)
+    if not prof:
+        die("could not read current profile from DB")
+    font = prof.get("fontColor", "?")
+    bg = prof.get("backgroundColor", "?")
+    print("Current look:")
+    print("  fontColor:       %s" % font)
+    print("  backgroundColor: %s" % bg)
+    print("  swatch:          %s" % swatch(font, bg))
+    match = match_theme_key(entries, font, bg)
+    if match:
+        print("  matches theme:   %s (%s)" % (match["key"], match["label"]))
+    else:
+        print("  matches theme:   (none — custom or hand-edited colors)")
+
+
+def cmd_menu(entries):
+    db = require_db()
+    while True:
+        print()
+        print("CRT theme picker — pick a number to PREVIEW it (applies + launches).")
+        print("Whatever you preview LAST stays as the default `blog` uses.\n")
+        for i, e in enumerate(entries, 1):
+            prof, _ = load_theme_json(e)
+            print_theme_line(i, e, prof)
+        print()
+        try:
+            choice = input("Number to preview, or 'q' to quit: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+        if choice.lower() in ("q", "quit", "exit", ""):
+            print("Bye. The last-previewed theme remains the default.")
+            return
+        if not choice.isdigit() or not (1 <= int(choice) <= len(entries)):
+            print("  -> please enter a number 1-%d, or 'q'." % len(entries))
+            continue
+        entry = entries[int(choice) - 1]
+        prof, _ = load_theme_json(entry)
+        apply_theme(db, prof, entry["label"])
+        print("  -> applied '%s' and launching preview. This is now the default."
+              % entry["label"])
+        launch(entry["label"])
+
+
+# --- entrypoint ------------------------------------------------------------
+
+def build_parser():
+    p = argparse.ArgumentParser(
+        prog="crt-theme",
+        description="CRT theme picker for the retro-writer cockpit (cool-retro-term).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "With no command, opens an interactive picker.\n"
+            "The look lives in cool-retro-term's settings DB; the last theme you\n"
+            "apply is what `blog` launches with."
+        ),
+    )
+    sub = p.add_subparsers(dest="command")
+    sub.add_parser("list", help="list themes with color swatches (no launch)")
+    sp_set = sub.add_parser("set", help="apply a theme as the default (no launch)")
+    sp_set.add_argument("key", help="theme key (see `crt-theme list`)")
+    sp_show = sub.add_parser("show", help="apply a theme and launch a preview")
+    sp_show.add_argument("key", help="theme key (see `crt-theme list`)")
+    sub.add_parser("current", help="show the current look + matching theme key")
+    return p
+
+
+def main(argv):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    entries = load_manifest()
+
+    if args.command is None:
+        cmd_menu(entries)
+    elif args.command == "list":
+        cmd_list(entries)
+    elif args.command == "set":
+        cmd_set(entries, args.key, launch_after=False)
+    elif args.command == "show":
+        cmd_set(entries, args.key, launch_after=True)
+    elif args.command == "current":
+        cmd_current(entries)
+    else:
+        parser.print_help()
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

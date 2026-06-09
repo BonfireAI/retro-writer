@@ -1,0 +1,62 @@
+[
+  {
+    "key": "amber",
+    "label": "Classic Amber",
+    "desc": "The default warm amber phosphor on black — the cockpit's house look.",
+    "file": "amber.json"
+  },
+  {
+    "key": "green-p1",
+    "label": "P1 Phosphor Green",
+    "desc": "Bright P1 green on black — the archetypal old-terminal glow.",
+    "file": "green-p1.json"
+  },
+  {
+    "key": "green-soft",
+    "label": "Soft Green",
+    "desc": "Gentler green on a faintly green-tinted black — easier on the eyes.",
+    "file": "green-soft.json"
+  },
+  {
+    "key": "white-ibm",
+    "label": "IBM White",
+    "desc": "Neutral white phosphor, low chroma — the monochrome PC-monitor look.",
+    "file": "white-ibm.json"
+  },
+  {
+    "key": "wordperfect-blue",
+    "label": "WordPerfect Blue",
+    "desc": "Iconic DOS-era pale text on deep blue; effects kept modest to stay crisp.",
+    "file": "wordperfect-blue.json"
+  },
+  {
+    "key": "commodore-cyan",
+    "label": "Commodore Cyan",
+    "desc": "Pale cyan on dark navy — the home-computer-of-1985 palette.",
+    "file": "commodore-cyan.json"
+  },
+  {
+    "key": "vintage-burn",
+    "label": "Heavy Vintage Amber",
+    "desc": "Aged amber tube: cranked burn-in, bloom, flicker and curve — still legible.",
+    "file": "vintage-burn.json"
+  },
+  {
+    "key": "clean-amber",
+    "label": "Clean Amber",
+    "desc": "Amber with effects near zero — flat and sharp for long writing sessions.",
+    "file": "clean-amber.json"
+  },
+  {
+    "key": "clean-green",
+    "label": "Clean Green",
+    "desc": "Clean green with effects near zero — maximum readability, minimal CRT.",
+    "file": "clean-green.json"
+  },
+  {
+    "key": "cottoncandy",
+    "label": "CandyFactory Cotton Candy",
+    "desc": "On-brand pink on deep plum — playful, with gentle phosphor glow.",
+    "file": "cottoncandy.json"
+  }
+]

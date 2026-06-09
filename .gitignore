@@ -1,2 +1,6 @@
 # personal drafts never live in this repo
 *.wg
+
+# python bytecode (crt-theme is a script, not a package)
+__pycache__/
+*.pyc

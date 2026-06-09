@@ -4,21 +4,19 @@
 # Opens cool-retro-term fullscreen, in ~/writing, running WordGrinder.
 # One action -> you're in the phosphor glow, writing.
 #
-# The CRT profile is overridable via RETRO_WRITER_PROFILE.
-# NOTE: the default below is PROVISIONAL — the real chosen profile name is
-# set later, after Anta's live amber/green/blue look-pick. Do not treat
-# "Default Amber" as the final choice.
+# The look (amber / green / blue / etc.) is chosen with `crt-theme`. That tool
+# writes cool-retro-term's settings DB, so whatever theme you last applied is
+# what `blog` launches with. The --profile flag is NOT used (it is broken in
+# cool-retro-term 1.2.0).
 
 set -euo pipefail
 
 WRITING_DIR="${RETRO_WRITER_DIR:-$HOME/writing}"
-PROFILE="${RETRO_WRITER_PROFILE:-Default Amber}"
 
 mkdir -p "$WRITING_DIR"
 
 # -e CATCHES ALL FOLLOWING ARGS, so `-e wordgrinder` MUST be the last option.
 exec cool-retro-term \
 	--fullscreen \
-	--profile "$PROFILE" \
 	--workdir "$WRITING_DIR" \
 	-e wordgrinder

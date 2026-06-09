@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # install.sh — install the retro-writer cockpit into the user's home.
 #
-#   - symlinks bin/blog and bin/blog-export into ~/.local/bin/ (chmod +x in repo)
+#   - symlinks bin/blog, bin/blog-export and bin/crt-theme into ~/.local/bin/
+#     (chmod +x in repo)
 #   - installs desktop/retro-writer.desktop into ~/.local/share/applications/
 #   - creates the drafts dir ~/writing/
 #
@@ -17,7 +18,7 @@ WRITING_DIR="$HOME/writing"
 
 mkdir -p "$LOCAL_BIN" "$APPS_DIR" "$WRITING_DIR"
 
-for cmd in blog blog-export; do
+for cmd in blog blog-export crt-theme; do
 	chmod +x "$BIN_SRC/$cmd"
 	ln -sf "$BIN_SRC/$cmd" "$LOCAL_BIN/$cmd"
 	printf 'linked: %s -> %s\n' "$LOCAL_BIN/$cmd" "$BIN_SRC/$cmd"
