@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # cool-retro-term / any GUI is NOT needed: the python tests use a temp
+      # sqlite DB and the bash launcher is tested via `blog --print-cmd`. There
+      # is no display in CI. We need wordgrinder (for the .wg <-> .md round-trip
+      # tests) and shellcheck (for the bash lint gate).
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wordgrinder shellcheck
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python test dependencies
+        run: pip install pytest coverage
+
+      - name: Run tests + lint + coverage gate
+        run: ./run-tests.sh

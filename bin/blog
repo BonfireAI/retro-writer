@@ -13,6 +13,20 @@ set -euo pipefail
 
 WRITING_DIR="${RETRO_WRITER_DIR:-$HOME/writing}"
 
+# Test/no-launch seam: print the exact command and exit WITHOUT launching.
+# Triggered by `blog --print-cmd` or RETRO_WRITER_DRY_RUN=1. Lets tests assert
+# the command shape with no GUI/display. The argument vector below is the SAME
+# one `exec` uses, so the printed command is authoritative.
+print_cmd_and_exit() {
+	printf '%s\n' \
+		"cool-retro-term --fullscreen --workdir $WRITING_DIR -e wordgrinder"
+	exit 0
+}
+
+if [ "${1:-}" = "--print-cmd" ] || [ "${RETRO_WRITER_DRY_RUN:-}" = "1" ]; then
+	print_cmd_and_exit
+fi
+
 mkdir -p "$WRITING_DIR"
 
 # -e CATCHES ALL FOLLOWING ARGS, so `-e wordgrinder` MUST be the last option.

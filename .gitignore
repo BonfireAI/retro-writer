@@ -4,3 +4,10 @@
 # python bytecode (crt-theme is a script, not a package)
 __pycache__/
 *.pyc
+
+# test + coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml

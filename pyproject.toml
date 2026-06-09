@@ -1,0 +1,30 @@
+# retro-writer — test & coverage configuration.
+#
+# This repo is not a Python package; it's a small Linux tool (glue around
+# cool-retro-term + WordGrinder). This file exists only to configure pytest and
+# coverage.py for the test suite. See run-tests.sh and README "Development &
+# tests".
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+
+[tool.coverage.run]
+# Measure ONLY our python tool. The bash scripts are covered by behavior/e2e
+# tests + shellcheck (bash line-coverage is not measured; see README).
+# The file has no .py extension and is imported via SourceFileLoader, so we
+# pin it explicitly rather than relying on package discovery.
+include = ["*/bin/crt-theme"]
+branch = true
+
+[tool.coverage.report]
+# crt-theme's interactive menu (cmd_menu) reads from a TTY and launches GUIs;
+# it is exercised indirectly but its input-loop lines are excluded from the
+# hard coverage gate. Everything else must be covered.
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+]
+show_missing = true
+skip_covered = false

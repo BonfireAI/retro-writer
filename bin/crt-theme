@@ -38,6 +38,10 @@ DB_GLOB = os.path.expanduser(
 )
 DB_INI_NAME_MARKER = "Name=coolretroterm1"
 
+# Tests (and power users) can pin an exact DB path so the tool never touches the
+# real cool-retro-term database. When set, this overrides the glob entirely.
+DB_ENV_VAR = "CRT_THEME_DB"
+
 PROFILE_ROW = "_CURRENT_PROFILE"
 
 
@@ -108,9 +112,23 @@ def load_theme_json(entry):
 
 # --- DB --------------------------------------------------------------------
 
-def find_db():
-    """Glob the Databases dir for the .sqlite whose .ini sidecar is coolretroterm1."""
-    candidates = sorted(glob.glob(DB_GLOB))
+def find_db(db_glob=None):
+    """Find the .sqlite whose .ini sidecar names it `coolretroterm1`.
+
+    Resolution order:
+      1. The CRT_THEME_DB env var (an exact path) — used by tests and lets a
+         user pin a non-default DB. Returned as-is if the file exists.
+      2. The provided `db_glob` (defaults to the real cool-retro-term location):
+         pick the candidate whose .ini sidecar contains `Name=coolretroterm1`.
+      3. Fallback: if exactly one .sqlite matched (and had no readable .ini),
+         it is still very likely the right one.
+    Returns the DB path, or None if nothing usable was found.
+    """
+    override = os.environ.get(DB_ENV_VAR)
+    if override:
+        return override if os.path.isfile(override) else None
+
+    candidates = sorted(glob.glob(db_glob or DB_GLOB))
     for db in candidates:
         ini = os.path.splitext(db)[0] + ".ini"
         try:
@@ -154,7 +172,7 @@ def read_current_profile(db):
         return None
 
 
-def apply_theme(db, prof, label):
+def apply_theme(db, prof, label=None):
     """Stop a running cool-retro-term, back up the DB, write the profile row."""
     # 1. Stop any running instance so it can't overwrite our write on quit.
     #    EXACT name only — never -f (that would match this script's own argv).
@@ -218,6 +236,33 @@ def match_theme_key(entries, font_hex, bg_hex):
            norm(prof["backgroundColor"]) == norm(bg_hex):
             return e
     return None
+
+
+# --- importable convenience surface ----------------------------------------
+# Thin, named wrappers over the internals above so the tool's logic is easy to
+# drive from pytest without reimplementing it. They change no CLI behavior.
+
+def load_theme(key, entries=None):
+    """Load a theme profile dict by its manifest key. Exits on unknown key."""
+    if entries is None:
+        entries = load_manifest()
+    entry = manifest_by_key(entries, key)
+    if not entry:
+        die("unknown theme key: %s (run `crt-theme list` to see keys)" % key, code=2)
+    prof, _ = load_theme_json(entry)
+    return prof
+
+
+def render_swatch(prof):
+    """ANSI truecolor swatch for a profile's fontColor on its backgroundColor."""
+    return swatch(prof["fontColor"], prof["backgroundColor"])
+
+
+def match_theme(prof, entries=None):
+    """Return the manifest entry whose colors match this profile, or None."""
+    if entries is None:
+        entries = load_manifest()
+    return match_theme_key(entries, prof.get("fontColor"), prof.get("backgroundColor"))
 
 
 # --- commands --------------------------------------------------------------
@@ -329,10 +374,11 @@ def main(argv):
         cmd_set(entries, args.key, launch_after=True)
     elif args.command == "current":
         cmd_current(entries)
-    else:
+    else:  # pragma: no cover - unreachable: argparse rejects unknown commands first
         parser.print_help()
-        sys.exit(2)
+        return 2
+    return 0
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    sys.exit(main(sys.argv[1:]))

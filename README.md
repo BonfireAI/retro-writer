@@ -1,5 +1,7 @@
 # retro-writer
 
+![CI](https://github.com/BonfireAI/retro-writer/actions/workflows/ci.yml/badge.svg)
+
 **A distraction-free retro writing cockpit for Linux.** A real '90s phosphor-glow
 CRT screen, a full-screen word processor inside it, and one command to drop into
 the glow and write — clean Markdown out the other end.
@@ -39,6 +41,15 @@ That `.md` is yours to publish wherever. (This iteration is deliberately the
   sudo apt install cool-retro-term wordgrinder      # Debian / Ubuntu / Pop!_OS
   ```
 - `python3` (for the theme picker). That's it — the rest is shell.
+
+## Platforms
+
+- **Linux — today.** retro-writer runs on Linux now (it needs cool-retro-term and
+  WordGrinder, both available on Debian/Ubuntu/Pop!_OS). This is where we use it
+  every day.
+- **macOS & Windows — planned.** Both are on our roadmap. cool-retro-term and
+  WordGrinder exist on those platforms, so the glue is the work; we're tracking
+  it and will ship it when it's solid.
 
 ## Install
 
@@ -115,6 +126,51 @@ media/                the screenshots above
 ```
 
 `~/writing/` (your drafts) is intentionally **not** in this repo.
+
+## Development & tests
+
+retro-writer is small, but it's tested. Run the whole gate with:
+
+```sh
+./run-tests.sh
+```
+
+That single script:
+
+1. **shellchecks** the bash scripts (`bin/blog`, `bin/blog-export`, `bin/install.sh`)
+   and fails on any finding,
+2. runs the **pytest** suite under **coverage.py**, and
+3. **fails if `crt-theme` line coverage drops below 95%** (it currently sits at 100%).
+
+Requirements for the suite: `python3`, `pytest`, `coverage`, `shellcheck`, and
+`wordgrinder`. The few tests that exercise the real `.wg ↔ .md` conversion are
+skipped automatically if `wordgrinder` isn't installed (CI installs it).
+
+```sh
+pip install pytest coverage
+sudo apt install wordgrinder shellcheck    # Debian / Ubuntu / Pop!_OS
+```
+
+**What's covered, honestly:**
+
+- **`crt-theme` (python)** — measured **line + branch coverage** via coverage.py.
+  Unit tests drive every command (`list` / `set` / `show` / `current` / the
+  interactive menu) and every error path against a **temporary** sqlite DB that
+  mirrors cool-retro-term's real schema. Tests **never read or write your real
+  cool-retro-term database** — they pin the DB via the `CRT_THEME_DB` override.
+- **`blog` / `blog-export` / `install.sh` (bash)** — covered by **behavior + e2e
+  tests** (invoked through the real shell via subprocess) and by **shellcheck**.
+  Bash *line*-coverage is **not** measured (there's no equivalent gate); the
+  behavior tests assert the observable contract instead. `blog` exposes a
+  no-launch seam — `blog --print-cmd` (or `RETRO_WRITER_DRY_RUN=1`) prints the
+  exact `cool-retro-term …` command and exits without opening a window — so its
+  command shape is asserted with no GUI/display.
+- **themes** — every `themes/*.json` is validated (parses, shares the 23-key
+  profile schema, valid `#rrggbb` colors) and cross-checked against
+  `manifest.json` (unique keys, files exist, no orphans).
+
+CI runs the same `./run-tests.sh` on every push and pull request
+(see `.github/workflows/ci.yml`); no display or GUI is needed.
 
 ---
 
