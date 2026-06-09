@@ -129,3 +129,43 @@ def test_output_basename_next_to_source(tmp_path):
     res = run_export([str(wg)], tmp_path)
     assert res.returncode == 0, res.stderr
     assert (sub / "essay.md").is_file()
+
+
+# --- error surfacing (Elegance Law) ----------------------------------------
+
+def test_blog_export_surfaces_wordgrinder_error_on_failure(tmp_path):
+    """blog-export must surface wordgrinder's real stderr, not swallow it.
+
+    Uses a fake wordgrinder that prints a unique marker to stderr and exits 1.
+    The marker must appear in blog-export's stderr so the caller learns WHY the
+    conversion failed (Elegance Law: failure is how machinery communicates).
+    """
+    # Create a fake wordgrinder that emits a unique marker and exits nonzero.
+    fake_bin = tmp_path / "fakebin"
+    fake_bin.mkdir()
+    fake_wg = fake_bin / "wordgrinder"
+    fake_wg.write_text("#!/usr/bin/env bash\necho 'WORDGRINDER_REAL_ERROR_MARKER_42' >&2\nexit 1\n")
+    fake_wg.chmod(0o755)
+
+    # Create a valid-looking .wg source file (blog-export only checks existence + .wg).
+    src = tmp_path / "draft.wg"
+    src.write_text("")
+
+    env = dict(os.environ)
+    env["RETRO_WRITER_DIR"] = str(tmp_path)
+    # Prepend the fake bin dir so our fake wordgrinder is found first.
+    env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+
+    res = subprocess.run(
+        ["bash", BLOG_EXPORT, str(src)],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert res.returncode != 0, "expected nonzero exit when wordgrinder fails"
+    assert "WORDGRINDER_REAL_ERROR_MARKER_42" in res.stderr, (
+        f"wordgrinder error marker not found in blog-export stderr.\n"
+        f"stderr was: {res.stderr!r}\n"
+        f"stdout was: {res.stdout!r}"
+    )
