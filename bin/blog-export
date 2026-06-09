@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# blog-export — convert a WordGrinder draft (.wg) to clean Markdown (.md).
+#
+# Usage:
+#   blog-export [file.wg]
+#     With an argument: convert that file.
+#     With NO argument: convert the most-recently-modified *.wg in ~/writing/.
+#
+# Output: a .md of the same basename next to the source.
+# Mechanism: `wordgrinder --convert <src> <dest>` (extension autodetect).
+# Verified on WordGrinder 0.8: .md is a supported export extension and
+# produces clean Markdown — no fallback needed.
+
+set -euo pipefail
+
+WRITING_DIR="${RETRO_WRITER_DIR:-$HOME/writing}"
+
+die() {
+	printf 'blog-export: error: %s\n' "$1" >&2
+	exit 1
+}
+
+command -v wordgrinder >/dev/null 2>&1 || die "wordgrinder not found on PATH"
+
+if [ "$#" -gt 1 ]; then
+	die "too many arguments; usage: blog-export [file.wg]"
+fi
+
+if [ "$#" -eq 1 ]; then
+	src="$1"
+	[ -f "$src" ] || die "file not found: $src"
+else
+	# No argument: find the most-recently-modified *.wg in the drafts dir.
+	[ -d "$WRITING_DIR" ] || die "drafts dir not found: $WRITING_DIR"
+	src="$(find "$WRITING_DIR" -maxdepth 1 -type f -name '*.wg' -printf '%T@\t%p\n' \
+		| sort -rn | head -1 | cut -f2-)"
+	[ -n "$src" ] || die "no *.wg drafts found in $WRITING_DIR"
+fi
+
+case "$src" in
+	*.wg) ;;
+	*) die "expected a .wg file, got: $src" ;;
+esac
+
+# Output .md of the same basename, in the same directory as the source.
+dest="${src%.wg}.md"
+
+wordgrinder --convert "$src" "$dest" >/dev/null 2>&1 \
+	|| die "conversion failed: $src -> $dest"
+
+[ -f "$dest" ] || die "conversion reported success but no output at: $dest"
+
+printf 'Exported: %s\n' "$dest"

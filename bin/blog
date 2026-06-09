@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# blog — the one-command writing-cockpit launcher.
+#
+# Opens cool-retro-term fullscreen, in ~/writing, running WordGrinder.
+# One action -> you're in the phosphor glow, writing.
+#
+# The CRT profile is overridable via RETRO_WRITER_PROFILE.
+# NOTE: the default below is PROVISIONAL — the real chosen profile name is
+# set later, after Anta's live amber/green/blue look-pick. Do not treat
+# "Default Amber" as the final choice.
+
+set -euo pipefail
+
+WRITING_DIR="${RETRO_WRITER_DIR:-$HOME/writing}"
+PROFILE="${RETRO_WRITER_PROFILE:-Default Amber}"
+
+mkdir -p "$WRITING_DIR"
+
+# -e CATCHES ALL FOLLOWING ARGS, so `-e wordgrinder` MUST be the last option.
+exec cool-retro-term \
+	--fullscreen \
+	--profile "$PROFILE" \
+	--workdir "$WRITING_DIR" \
+	-e wordgrinder

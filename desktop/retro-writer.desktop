@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Retro Writer
+GenericName=Retro Writing Cockpit
+Comment=Open the phosphor-glow CRT writing cockpit (WordGrinder in cool-retro-term)
+Exec=/home/ishtar/.local/bin/blog
+Terminal=false
+Icon=utilities-terminal
+Categories=Office;Utility;
+Keywords=writing;blog;wordgrinder;retro;crt;
