@@ -24,8 +24,13 @@ for cmd in blog blog-export crt-theme; do
 	printf 'linked: %s -> %s\n' "$LOCAL_BIN/$cmd" "$BIN_SRC/$cmd"
 done
 
-# Desktop entry: copy so its Exec points at the installed ~/.local/bin/blog.
+# Desktop entry: copy the shipped (path-free `Exec=blog`) file, then rewrite the
+# INSTALLED copy's Exec to the absolute ~/.local/bin/blog symlink we just made.
+# The absolute path makes the app-menu launcher robust even when the desktop
+# environment's launch PATH omits ~/.local/bin (a common gotcha). We rewrite the
+# installed copy only — the repo file stays portable and leak-free.
 cp "$REPO_DIR/desktop/retro-writer.desktop" "$APPS_DIR/retro-writer.desktop"
+sed -i "s|^Exec=.*|Exec=$LOCAL_BIN/blog|" "$APPS_DIR/retro-writer.desktop"
 printf 'installed: %s\n' "$APPS_DIR/retro-writer.desktop"
 
 update-desktop-database "$APPS_DIR" 2>/dev/null || true
