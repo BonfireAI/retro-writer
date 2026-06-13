@@ -2,7 +2,7 @@
 
 - **Date:** 2026-06-09
 - **Status:** Approved (design); awaiting spec review before implementation planning
-- **Owner:** Ishtar / Anta
+- **Owner:** Anta
 
 ## Goal
 
@@ -26,7 +26,7 @@ deliberately out of scope for this iteration.
 
 ## Out of scope (this iteration)
 
-- Any publishing pipeline (into `candyfactory-www/blog/data.js` or a new static site).
+- Any publishing pipeline (into a CandyFactory blog pipeline or a new static site).
 - WordTsar / the genuine DOS software.
 - The optional retro HTML output preview is **opt-in**, not built by default (see below).
 
